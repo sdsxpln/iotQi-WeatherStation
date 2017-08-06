@@ -5,19 +5,21 @@
 #define _USERMODEL_H
 #include "bme280.h"
 
+#include <iotQiTypes.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-    void initUserModel();
+    IOTQIMODEL_RESULT initUserModel();
     void deinitUserModel();
-
     
-    IOTQI_RESULT UserModel_GetCommands(STRING_HANDLE commandsMeta);
-    EXECUTE_COMMAND_RESULT UserModel_CommandMsgCallback(char* cmdBuffer);
+    IOTQIMODEL_RESULT UserModel_GetCommands(STRING_HANDLE commandsMeta);
+    EXECUTE_COMMAND_RESULT UserModel_CommandMsgCallback(const char* cmdBuffer);
 
-    IOTQI_RESULT UserModel_DoWork();
-    
+    TelemetryTemplate BmeSensor(STRING_HANDLE* sample_data);
+    AlertTemplate WindAlert(STRING_HANDLE* alert_data);
+ 
 #ifdef __cplusplus
 }
 #endif

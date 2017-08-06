@@ -1,9 +1,7 @@
 // Copyright (c) LooUQ Incorporated. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-#ifdef ARDUINO
-#include "AzureIoTHub.h"
-#else
+#ifndef ARDUINO
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/platform.h"
 #include "serializer.h"
@@ -13,14 +11,12 @@
 #include "sdk/schemaserializer.h"
 
 #include <iotQi.h>
-#include <globals.h>
 #include "userModel.h"
 #include "bme280.h"
 /* ------------------------------------------------------------------------------------------------------------------------------------------
 *  Add any required headers for project specific functionality.  These headers are likely to be required in the UserModel.c file as well.
 ------------------------------------------------------------------------------------------------------------------------------------------ */
 
-//#include "oled-display.h"
 
 /* ------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------ */
@@ -100,15 +96,17 @@ EXECUTE_COMMAND_RESULT SetAirResistance(UserModel* device, int Position)
 
 // ------------------------------------------------------------------------------------------------------------------------------------------
 
-IOTQI_RESULT UserModel_DoWork()
+//IOTQI_RESULT UserModel_DoWork()
+
+TelemetryTemplate BmeSensor(STRING_HANDLE* sample_data)
 {
-    (void)printf("userModel_DoWork(): entering...\r\n");
+    (void)printf("BmeSensor[telemetry]): entering...\r\n");
  
     readBmeValues();
 
     
     int avgWindSpeed = 10;
-    userModel->DeviceId = "IotqiDevice1";
+    userModel->DeviceId = "IotqiWeatherStn";
     userModel->WindSpeed = avgWindSpeed + (rand() % 4 + 2);
     userModel->Bme.Temperature = temperature;
     userModel->Bme.Humidity = humidity;
@@ -121,17 +119,38 @@ IOTQI_RESULT UserModel_DoWork()
 
     unsigned char* msgBuffer;
     size_t msgSize;
-    if (SERIALIZE(&msgBuffer, &msgSize, userModel->DeviceId, userModel->WindSpeed, userModel->Bme) != CODEFIRST_OK)
+    if ( SERIALIZE(&msgBuffer, &msgSize, userModel->DeviceId, userModel->WindSpeed, userModel->Bme) )
     {
         (void)printf("***Failed to serialize model to message\r\n");
     }
     else
     {
-        (void)printf("userModel_DoWork(): serialization result=%.*s size=%d \r\n", msgSize, msgBuffer, msgSize);
-        iotQiSendTelemetry(msgBuffer, msgSize, "AnometerData", eventValue);
+        //(void)printf("userModel_DoWork(): serialization result=%.*s size=%d \r\n", msgSize, msgBuffer, msgSize);
+        //iotQiSendTelemetry(msgBuffer, msgSize, "AnometerData", eventValue);
+        
+        *sample_data = STRING_construct_n(msgBuffer, msgSize);
+        free(msgBuffer);
+        return STRING_construct_sprintf("Wind Speed:%d", userModel->WindSpeed);
     }
 }
 
+AlertTemplate WindAlert(STRING_HANDLE* alert_data)
+{
+    userModel->WindSpeed = 25;
+
+    unsigned char* msgBuffer;
+    size_t msgSize;
+
+    if (SERIALIZE(&msgBuffer, &msgSize, userModel->WindSpeed))
+    {
+        (void)printf("*** Failed to serialize model to message\r\n");
+    }
+    else
+    {
+        *alert_data = STRING_construct_n(msgBuffer, msgSize);
+        free(msgBuffer);
+    }
+}
 
 /* iotQi Required ======================================================================================================
  * The following methods are required to enable your model code to interface with iotQi
@@ -139,7 +158,7 @@ IOTQI_RESULT UserModel_DoWork()
 
 /* initialize and destroy model objects */
 
-void initUserModel()
+IOTQIMODEL_RESULT initUserModel()
 {
     /* initialize any parts of your model you need here */
     srand((unsigned int)time(NULL));
@@ -151,10 +170,10 @@ void initUserModel()
 	if (userModel == NULL)
 	{
 		(void)printf("Failed on create user-defined model\r\n");
-        return IOTQI_ERROR;
+        return MODEL_ERROR;
 	}
     (void)printf("User-Defined Model Initialized\r\n");
-    return IOTQI_OK;
+    return MODEL_OK;
 }
 
 void deinitUserModel()
@@ -167,28 +186,29 @@ void deinitUserModel()
  * The next two methods link your user model commands back to iotQi
  * -------------------------------------------------------------------------------------------------------------------- */
 
-IOTQI_RESULT UserModel_GetCommands(STRING_HANDLE commandsMeta)
+IOTQIMODEL_RESULT UserModel_GetCommands(STRING_HANDLE commandsMeta)
 {
     #if defined(IOTQI_DEBUG)
     (void)printf("> Fetching user-defined commands\r\n");
     #endif
 
-	if (SchemaSerializer_SerializeCommandMetadata(GET_MODEL_HANDLE(UserModelNamespace, UserModel), commandsMeta) != SCHEMA_SERIALIZER_OK)
-	{
-		return IOTQI_ERROR;
-	}
-	return IOTQI_OK;
+    if (SchemaSerializer_SerializeCommandMetadata(GET_MODEL_HANDLE(UserModelNamespace, UserModel), commandsMeta) != SCHEMA_SERIALIZER_OK)
+    {
+        return MODEL_ERROR;
+    }
+    return MODEL_OK;
 }
 
 
-EXECUTE_COMMAND_RESULT UserModel_CommandMsgCallback(char* cmdBuffer)
+EXECUTE_COMMAND_RESULT UserModel_CommandMsgCallback(const char* cmdBuffer)
 {
-    #if defined(IOTQI_DEBUG)
+    #ifdef IOTQI_DEBUG
     (void)printf("> Invoking user command: %s \r\n", cmdBuffer);
     #endif
 
     EXECUTE_COMMAND_RESULT result = EXECUTE_COMMAND(userModel, cmdBuffer);
 }
+
 
 
 
